@@ -5,12 +5,12 @@ import {
   Search,
   ChevronRight,
   ChevronDown,
-  Layers,
   Terminal,
   AlertCircle,
   Play,
   FolderTree,
   Globe,
+  Star,
 } from 'lucide-react';
 import { useClusterStore } from '../../stores/clusterStore';
 import { useViewerStore } from '../../stores/viewerStore';
@@ -64,6 +64,23 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({ onOpenCluste
   const [isPodsExpanded, setIsPodsExpanded] = useState(true);
   const [groupByApp, setGroupByApp] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  const [favoriteNamespaces, setFavoriteNamespaces] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lora-fav-ns');
+      return saved ? JSON.parse(saved) : ['default'];
+    } catch {
+      return ['default'];
+    }
+  });
+
+  const toggleFavoriteNamespace = (ns: string) => {
+    setFavoriteNamespaces((prev) => {
+      const next = prev.includes(ns) ? prev.filter((n) => n !== ns) : [...prev, ns];
+      localStorage.setItem('lora-fav-ns', JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Extract all unique regions across configured clusters
   const availableRegions = useMemo(() => {
@@ -300,12 +317,45 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({ onOpenCluste
         )}
       </div>
 
-      {/* Namespace selection */}
+      {/* Namespace selection & Bookmarks */}
       <div className="p-3 border-b border-slate-200 dark:border-slate-800">
-        <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-          <span>Namespace</span>
-          <Layers className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+            <span>Namespace</span>
+          </label>
+          {selectedNamespace && (
+            <button
+              onClick={() => toggleFavoriteNamespace(selectedNamespace)}
+              className="text-slate-400 hover:text-amber-500 transition p-0.5"
+              title={favoriteNamespaces.includes(selectedNamespace) ? 'Remove from favorites' : 'Star / Favorite this namespace'}
+            >
+              <Star className={`w-3.5 h-3.5 ${favoriteNamespaces.includes(selectedNamespace) ? 'fill-amber-400 text-amber-400' : ''}`} />
+            </button>
+          )}
+        </div>
+
+        {/* Favorite Namespaces Chips */}
+        {favoriteNamespaces.length > 0 && (
+          <div className="mb-2 flex items-center gap-1 overflow-x-auto scrollbar-none pb-0.5">
+            <span className="text-[10px] text-slate-400 font-mono flex items-center gap-0.5">
+              <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400 shrink-0" />
+            </span>
+            {favoriteNamespaces.map((ns) => (
+              <button
+                key={ns}
+                onClick={() => selectNamespace(ns)}
+                className={`px-1.5 py-0.2 rounded text-[10px] font-mono transition shrink-0 ${
+                  selectedNamespace === ns
+                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                {ns}
+              </button>
+            ))}
+          </div>
+        )}
+
         <select
           disabled={isLoadingNamespaces || namespaces.length === 0}
           value={selectedNamespace || ''}
@@ -314,7 +364,7 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({ onOpenCluste
         >
           {namespaces.map((ns) => (
             <option key={ns} value={ns}>
-              {ns}
+              {favoriteNamespaces.includes(ns) ? `⭐ ${ns}` : ns}
             </option>
           ))}
         </select>

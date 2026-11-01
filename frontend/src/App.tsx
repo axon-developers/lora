@@ -6,14 +6,16 @@ import { LogViewer } from './components/viewer/LogViewer';
 import { ConnectionMonitorModal } from './components/admin/ConnectionMonitorModal';
 import { SettingsModal } from './components/admin/SettingsModal';
 import { ClusterManagerModal } from './components/admin/ClusterManagerModal';
+import { CommandPalette } from './components/common/CommandPalette';
 import { useClusterStore } from './stores/clusterStore';
 import { useViewerStore } from './stores/viewerStore';
 import { wsManager } from './lib/ws';
 import { Terminal, Server, Plus } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { clusters, fetchClusters } = useClusterStore();
-  const { tabs, activeTabId, setPaused, closeTab } = useViewerStore();
+  const { clusters, fetchClusters, selectedClusterId, selectedNamespace } = useClusterStore();
+  const { tabs, activeTabId, setPaused, closeTab, clearLogs, setActiveTab, addTab, setHighlightedSeq, splitViewTabId } =
+    useViewerStore();
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('lora-theme');
@@ -22,6 +24,7 @@ export const App: React.FC = () => {
   const [isMonitorOpen, setIsMonitorOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isClusterManagerOpen, setIsClusterManagerOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Sync theme to document.documentElement for global styling
   useEffect(() => {
@@ -40,19 +43,58 @@ export const App: React.FC = () => {
     fetchClusters();
     wsManager.connect();
 
+    // Check for deep link hash on startup: #pod=...&container=...&seq=...
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const pod = params.get('pod');
+      const container = params.get('container') || '';
+      const seqStr = params.get('seq');
+      const clusterId = params.get('cluster') || selectedClusterId || 'local-kind';
+      const ns = params.get('ns') || selectedNamespace || 'default';
+
+      if (pod && container) {
+        const tabId = addTab({
+          clusterId,
+          namespace: ns,
+          podName: pod,
+          container,
+          previous: false,
+          sinceSeconds: 3600,
+        });
+
+        wsManager.subscribe(tabId, clusterId, ns, pod, container, false, 3600);
+
+        if (seqStr) {
+          const seq = parseInt(seqStr, 10);
+          if (!isNaN(seq)) {
+            setTimeout(() => setHighlightedSeq(tabId, seq), 800);
+          }
+        }
+      }
+    }
+
     return () => {
       wsManager.destroy();
     };
   }, []);
 
-  // Keyboard shortcuts
+  // Global Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when user is typing in an input
+      // Ctrl + K / Cmd + K: Open Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // Don't intercept single-letter shortcuts when typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
+      // Space: Toggle Pause/Resume
       if (e.code === 'Space') {
         e.preventDefault();
         if (activeTabId) {
@@ -63,11 +105,29 @@ export const App: React.FC = () => {
         }
       }
 
-      if (e.ctrlKey && e.key.toLowerCase() === 'w') {
+      // Ctrl + L: Clear Active Tab Buffer
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        if (activeTabId) {
+          clearLogs(activeTabId);
+        }
+      }
+
+      // Alt + W or Ctrl + W: Close Active Tab
+      if ((e.altKey && e.key.toLowerCase() === 'w') || (e.ctrlKey && e.key.toLowerCase() === 'w')) {
         e.preventDefault();
         if (activeTabId) {
           wsManager.unsubscribe(activeTabId);
           closeTab(activeTabId);
+        }
+      }
+
+      // Alt + 1 ... Alt + 9: Switch active tab
+      if (e.altKey && !isNaN(parseInt(e.key, 10))) {
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= tabs.length) {
+          e.preventDefault();
+          setActiveTab(tabs[num - 1].id);
         }
       }
     };
@@ -77,6 +137,7 @@ export const App: React.FC = () => {
   }, [activeTabId, tabs]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const splitTab = splitViewTabId ? tabs.find((t) => t.id === splitViewTabId) : null;
 
   return (
     <div className={`h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 ${isDark ? 'dark' : 'light'}`}>
@@ -84,6 +145,7 @@ export const App: React.FC = () => {
         onOpenMonitor={() => setIsMonitorOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenClusterManager={() => setIsClusterManagerOpen(true)}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         isDark={isDark}
         onToggleTheme={() => setIsDark(!isDark)}
       />
@@ -114,7 +176,19 @@ export const App: React.FC = () => {
               </button>
             </div>
           ) : activeTab ? (
-            <LogViewer key={activeTab.id} tab={activeTab} />
+            splitTab ? (
+              /* Side-by-Side Split View */
+              <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col border-r border-slate-300 dark:border-slate-800 overflow-hidden">
+                  <LogViewer key={activeTab.id} tab={activeTab} />
+                </div>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <LogViewer key={splitTab.id} tab={splitTab} />
+                </div>
+              </div>
+            ) : (
+              <LogViewer key={activeTab.id} tab={activeTab} />
+            )
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-slate-50 dark:bg-slate-950">
               <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center mb-3 text-indigo-600 dark:text-indigo-400 shadow-sm dark:shadow-inner">
@@ -125,7 +199,9 @@ export const App: React.FC = () => {
                 Select a cluster, namespace, pod, and click "Live" on a container to start streaming real-time logs.
               </p>
               <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-600 font-mono">
-                <span>[Space] Pause/Resume</span>
+                <span>[Ctrl+K] Search / Jump</span>
+                <span>•</span>
+                <span>[Space] Pause</span>
                 <span>•</span>
                 <span>[Ctrl+W] Close Tab</span>
               </div>
@@ -133,6 +209,17 @@ export const App: React.FC = () => {
           )}
         </main>
       </div>
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onOpenClusterManager={() => setIsClusterManagerOpen(true)}
+        onOpenMonitor={() => setIsMonitorOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark(!isDark)}
+      />
 
       {/* Admin Modals */}
       <ClusterManagerModal isOpen={isClusterManagerOpen} onClose={() => setIsClusterManagerOpen(false)} />

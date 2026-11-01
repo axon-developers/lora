@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, RefreshCw, Settings, Sun, Moon, Server, AlertCircle, User, LogIn, LogOut, Globe } from 'lucide-react';
+import { Activity, RefreshCw, Settings, Sun, Moon, Server, AlertCircle, User, LogIn, LogOut, Globe, Search } from 'lucide-react';
 import { useClusterStore } from '../../stores/clusterStore';
 import { api } from '../../lib/api';
 import { AuthStatus } from '../../types';
@@ -8,6 +8,7 @@ interface HeaderProps {
   onOpenMonitor: () => void;
   onOpenSettings: () => void;
   onOpenClusterManager: () => void;
+  onOpenCommandPalette: () => void;
   isDark: boolean;
   onToggleTheme: () => void;
 }
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMonitor,
   onOpenSettings,
   onOpenClusterManager,
+  onOpenCommandPalette,
   isDark,
   onToggleTheme,
 }) => {
@@ -201,6 +203,19 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
         )}
+
+        {/* Command Palette Trigger Button */}
+        <button
+          onClick={onOpenCommandPalette}
+          className="flex items-center gap-2 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition border border-slate-200 dark:border-slate-700/60 shadow-2xs"
+          title="Open Quick Search / Command Palette (Ctrl+K)"
+        >
+          <Search className="w-3.5 h-3.5 text-slate-400" />
+          <span className="hidden sm:inline font-sans text-xs">Jump to...</span>
+          <kbd className="px-1 py-0.2 rounded bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-[10px] font-mono text-slate-500 font-semibold">
+            Ctrl K
+          </kbd>
+        </button>
 
         <button
           onClick={onOpenClusterManager}

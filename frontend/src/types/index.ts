@@ -63,6 +63,9 @@ export interface ViewerTab {
   isPaused: boolean;
   autoScroll: boolean;
   filterText: string;
+  severityFilter?: 'ALL' | 'ERROR' | 'WARN' | 'INFO';
+  alertKeyword?: string;
+  highlightedSeq?: number | null;
   unreadCount: number;
   logs: LogEntry[];
   pausedQueue: LogEntry[];

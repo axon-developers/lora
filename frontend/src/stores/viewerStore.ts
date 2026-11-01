@@ -4,6 +4,7 @@ import { LogEntry, ViewerTab } from '../types';
 interface ViewerState {
   tabs: ViewerTab[];
   activeTabId: string | null;
+  splitViewTabId: string | null;
 
   addTab: (tabParams: {
     clusterId: string;
@@ -16,14 +17,46 @@ interface ViewerState {
 
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  setSplitViewTabId: (id: string | null) => void;
   appendLogs: (tabId: string, newEntries: LogEntry[]) => void;
   setPaused: (tabId: string, paused: boolean) => void;
   setAutoScroll: (tabId: string, enabled: boolean) => void;
   setFilter: (tabId: string, text: string) => void;
+  setSeverityFilter: (tabId: string, severity: 'ALL' | 'ERROR' | 'WARN' | 'INFO') => void;
+  setAlertKeyword: (tabId: string, keyword: string) => void;
+  setHighlightedSeq: (tabId: string, seq: number | null) => void;
   clearLogs: (tabId: string) => void;
   setTabStatus: (tabId: string, status: ViewerTab['status'], errMsg?: string) => void;
   setSelectedLog: (tabId: string, log: LogEntry | null) => void;
   setSinceSeconds: (tabId: string, seconds: number) => void;
+}
+
+function playAlertChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
+function notifyAlert(keyword: string, podName: string, message: string) {
+  playAlertChime();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(`LORA Alert: ${keyword} in ${podName}`, {
+      body: message.slice(0, 120),
+    });
+  }
 }
 
 const MAX_CLIENT_LINES = 50000;
@@ -32,6 +65,7 @@ const MAX_PAUSE_QUEUE = 5000;
 export const useViewerStore = create<ViewerState>((set, get) => ({
   tabs: [],
   activeTabId: null,
+  splitViewTabId: null,
 
   addTab: (params) => {
     const existing = get().tabs.find(
@@ -100,12 +134,23 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     }));
   },
 
+  setSplitViewTabId: (id) => set({ splitViewTabId: id }),
+
   appendLogs: (tabId, newEntries) => {
     if (!newEntries || newEntries.length === 0) return;
 
     set((state) => ({
       tabs: state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
+
+        // Check for alert keyword
+        if (tab.alertKeyword && tab.alertKeyword.trim() !== '') {
+          const kw = tab.alertKeyword.toLowerCase();
+          const match = newEntries.find((e) => e.message.toLowerCase().includes(kw));
+          if (match) {
+            notifyAlert(tab.alertKeyword, tab.podName, match.message);
+          }
+        }
 
         if (tab.isPaused) {
           // In pause mode: buffer into pausedQueue up to MAX_PAUSE_QUEUE
@@ -174,6 +219,27 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   setFilter: (tabId, text) => {
     set((state) => ({
       tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, filterText: text } : tab)),
+    }));
+  },
+
+  setSeverityFilter: (tabId, severity) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, severityFilter: severity } : tab)),
+    }));
+  },
+
+  setAlertKeyword: (tabId, keyword) => {
+    if (keyword && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, alertKeyword: keyword } : tab)),
+    }));
+  },
+
+  setHighlightedSeq: (tabId, seq) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === tabId ? { ...tab, highlightedSeq: seq } : tab)),
     }));
   },
 

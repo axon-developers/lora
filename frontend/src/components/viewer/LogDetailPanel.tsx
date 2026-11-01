@@ -11,6 +11,8 @@ import {
   Box,
   Layers,
   Hash,
+  Link,
+  AlertOctagon,
 } from 'lucide-react';
 
 interface LogDetailPanelProps {
@@ -19,7 +21,7 @@ interface LogDetailPanelProps {
 }
 
 export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'json' | 'raw'>('json');
+  const [activeTab, setActiveTab] = useState<'json' | 'stack' | 'raw'>('json');
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isCapturingImage, setIsCapturingImage] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,6 +39,15 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
 
   if (!entry) return null;
 
+  // Detect Stack Trace
+  const isStackTrace =
+    entry.message.includes('Traceback (most recent call last):') ||
+    entry.message.includes('Exception in thread') ||
+    entry.message.includes('goroutine ') ||
+    entry.message.includes('panic:') ||
+    /\bat [a-zA-Z0-9_.]+\([a-zA-Z0-9_.]+\.java:\d+\)/.test(entry.message) ||
+    /\n\s+at\s+/.test(entry.message);
+
   // Try extracting JSON from message
   let parsedJson: any = null;
   let isJson = false;
@@ -45,7 +56,6 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
     parsedJson = JSON.parse(entry.message);
     isJson = typeof parsedJson === 'object' && parsedJson !== null;
   } catch {
-    // If not pure JSON, check if there's an embedded JSON object inside the log line
     const firstBrace = entry.message.indexOf('{');
     const lastBrace = entry.message.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -70,6 +80,14 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
   const handleCopyJson = () => {
     navigator.clipboard.writeText(jsonString || entry.message);
     setCopiedType('json');
+    setTimeout(() => setCopiedType(null), 2000);
+  };
+
+  const handleCopyDeepLink = () => {
+    const hash = `#pod=${encodeURIComponent(entry.pod_name)}&container=${encodeURIComponent(entry.container)}&seq=${entry.seq}`;
+    const url = `${window.location.origin}${window.location.pathname}${hash}`;
+    navigator.clipboard.writeText(url);
+    setCopiedType('link');
     setTimeout(() => setCopiedType(null), 2000);
   };
 
@@ -359,10 +377,24 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
             </button>
           )}
 
+          {isStackTrace && (
+            <button
+              onClick={() => setActiveTab('stack')}
+              className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition shadow-2xs ${
+                activeTab === 'stack'
+                  ? 'bg-rose-600 text-white font-semibold'
+                  : 'bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20'
+              }`}
+            >
+              <AlertOctagon className="w-3.5 h-3.5" />
+              <span>Stack Trace</span>
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('raw')}
             className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 transition shadow-2xs ${
-              activeTab === 'raw' || !isJson
+              activeTab === 'raw' || (!isJson && !isStackTrace)
                 ? 'bg-indigo-600 text-white'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-700'
             }`}
@@ -372,8 +404,17 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
           </button>
         </div>
 
-        {/* Action Buttons: Copy Raw, Copy JSON, Copy as Image */}
+        {/* Action Buttons: Copy Deep Link, Copy Raw, Copy JSON, Copy as Image */}
         <div className="flex items-center gap-1.5 font-mono text-xs">
+          <button
+            onClick={handleCopyDeepLink}
+            className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition border border-slate-300 dark:border-slate-700 flex items-center gap-1 shadow-2xs"
+            title="Copy deep link URL to this log line"
+          >
+            {copiedType === 'link' ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Link className="w-3.5 h-3.5" />}
+            <span>{copiedType === 'link' ? 'Copied Link' : 'Share'}</span>
+          </button>
+
           {isJson && (
             <button
               onClick={handleCopyJson}
@@ -412,7 +453,32 @@ export const LogDetailPanel: React.FC<LogDetailPanelProps> = ({ entry, onClose }
 
       {/* Main Body Content */}
       <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed select-text">
-        {activeTab === 'json' && isJson ? (
+        {activeTab === 'stack' ? (
+          <div className="bg-rose-950/10 dark:bg-rose-950/20 p-3 rounded border border-rose-200 dark:border-rose-900/40 text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all shadow-2xs space-y-1">
+            <div className="font-bold text-rose-700 dark:text-rose-400 border-b border-rose-200 dark:border-rose-900/40 pb-1 mb-2 flex items-center gap-1.5 font-sans">
+              <AlertOctagon className="w-4 h-4 shrink-0" />
+              <span>Auto-Beautified Stack Trace</span>
+            </div>
+            {entry.message.split('\n').map((line, i) => {
+              const isHeader = line.includes('Exception') || line.includes('panic:') || line.includes('Error:');
+              const isFrame = line.trim().startsWith('at ') || line.includes('.go:') || line.includes('.java:') || line.includes('.py:');
+              return (
+                <div
+                  key={i}
+                  className={`py-0.5 ${
+                    isHeader
+                      ? 'text-rose-600 dark:text-rose-300 font-bold bg-rose-500/10 px-1 rounded'
+                      : isFrame
+                      ? 'text-indigo-600 dark:text-indigo-300 pl-4 border-l-2 border-indigo-400/40'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {line}
+                </div>
+              );
+            })}
+          </div>
+        ) : activeTab === 'json' && isJson ? (
           <div className="space-y-0.5">{renderHighlightedJson(jsonString)}</div>
         ) : (
           <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-all shadow-2xs">

@@ -30,14 +30,60 @@ export const LogViewer: React.FC<LogViewerProps> = ({ tab }) => {
 
   const isMultiPod = tab.podName.includes(',');
 
-  // Filter logs by text search
+  // Filter logs by text search, severity, and inverse/regex patterns
   const filteredLogs = useMemo(() => {
-    if (!tab.filterText || tab.filterText.trim() === '') {
-      return tab.logs;
+    let result = tab.logs;
+
+    // Severity Filter
+    if (tab.severityFilter && tab.severityFilter !== 'ALL') {
+      if (tab.severityFilter === 'ERROR') {
+        result = result.filter((l) => /error|fatal|exception|panic/i.test(l.message));
+      } else if (tab.severityFilter === 'WARN') {
+        result = result.filter((l) => /warn/i.test(l.message));
+      } else if (tab.severityFilter === 'INFO') {
+        result = result.filter((l) => /info/i.test(l.message));
+      }
     }
-    const q = tab.filterText.toLowerCase();
-    return tab.logs.filter((l) => l.message.toLowerCase().includes(q));
-  }, [tab.logs, tab.filterText]);
+
+    if (!tab.filterText || tab.filterText.trim() === '') {
+      return result;
+    }
+
+    const raw = tab.filterText.trim();
+    // Inverse search support: "!healthz" excludes healthz
+    if (raw.startsWith('!')) {
+      const negative = raw.slice(1).trim().toLowerCase();
+      if (negative) {
+        return result.filter((l) => !l.message.toLowerCase().includes(negative));
+      }
+      return result;
+    }
+
+    // Regex search support if contains regex operators
+    if (raw.includes('|') || raw.includes('.*')) {
+      try {
+        const re = new RegExp(raw, 'i');
+        return result.filter((l) => re.test(l.message));
+      } catch {
+        // Fallback to substring
+      }
+    }
+
+    const q = raw.toLowerCase();
+    return result.filter((l) => l.message.toLowerCase().includes(q));
+  }, [tab.logs, tab.filterText, tab.severityFilter]);
+
+  // Scroll to highlightedSeq on deep link
+  useEffect(() => {
+    if (tab.highlightedSeq && filteredLogs.length > 0) {
+      const idx = filteredLogs.findIndex((l) => l.seq === tab.highlightedSeq);
+      if (idx !== -1) {
+        rowVirtualizer.scrollToIndex(idx, { align: 'center' });
+        const targetLog = filteredLogs[idx];
+        setSelectedLog(tab.id, targetLog);
+      }
+    }
+  }, [tab.highlightedSeq, filteredLogs.length]);
 
   // Virtualizer
   const rowVirtualizer = useVirtualizer({
