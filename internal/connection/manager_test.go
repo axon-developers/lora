@@ -16,7 +16,7 @@ func TestConnectionManager_FanOutAndCleanup(t *testing.T) {
 	var streamStarted uint64
 	var streamStopped uint64
 
-	mgr.SetStreamFunc(func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, prev bool, pc *PodConnection) error {
+	mgr.SetStreamFunc(func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, sinceSeconds int64, prev bool, pc *PodConnection) error {
 		atomic.AddUint64(&streamStarted, 1)
 		ticker := time.NewTicker(10 * time.Millisecond)
 		defer ticker.Stop()
@@ -43,13 +43,13 @@ func TestConnectionManager_FanOutAndCleanup(t *testing.T) {
 	ctx := context.Background()
 
 	// Subscriber A connects
-	subA, _, streamKeyA, err := mgr.Subscribe(ctx, nil, "test-cluster", "default", "pod-1", "uid-101", "main", false, "viewer-A")
+	subA, _, streamKeyA, err := mgr.Subscribe(ctx, nil, "test-cluster", "default", "pod-1", "uid-101", "main", false, 100, 900, "viewer-A")
 	if err != nil {
 		t.Fatalf("subA failed: %v", err)
 	}
 
 	// Subscriber B connects to the same pod/container/UID
-	subB, _, streamKeyB, err := mgr.Subscribe(ctx, nil, "test-cluster", "default", "pod-1", "uid-101", "main", false, "viewer-B")
+	subB, _, streamKeyB, err := mgr.Subscribe(ctx, nil, "test-cluster", "default", "pod-1", "uid-101", "main", false, 100, 900, "viewer-B")
 	if err != nil {
 		t.Fatalf("subB failed: %v", err)
 	}

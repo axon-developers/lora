@@ -35,22 +35,55 @@ type DatabaseConfig struct {
 }
 
 type ClusterConfig struct {
-	ID                  string           `yaml:"id"`
-	Name                string           `yaml:"name"`
-	Environment         string           `yaml:"environment"`
-	ManagedKubeconfig   bool             `yaml:"managed_kubeconfig"`
-	Kubeconfig          KubeconfigConfig `yaml:"kubeconfig"`
-	Kconnect            KconnectConfig   `yaml:"kconnect"`
-	HealthCheckInterval string           `yaml:"health_check_interval"`
-	Enabled             bool             `yaml:"enabled"`
+	ID                  string            `yaml:"id" json:"id"`
+	Name                string            `yaml:"name" json:"name"`
+	Environment         string            `yaml:"environment" json:"environment"`
+	Region              string            `yaml:"region,omitempty" json:"region,omitempty"`
+	Regions             []string          `yaml:"regions,omitempty" json:"regions,omitempty"`
+	ActiveRegion        string            `yaml:"active_region,omitempty" json:"active_region,omitempty"`
+	RegionalContexts    map[string]string `yaml:"regional_contexts,omitempty" json:"regional_contexts,omitempty"`
+	ManagedKubeconfig   bool              `yaml:"managed_kubeconfig" json:"managed_kubeconfig"`
+	Kubeconfig          KubeconfigConfig  `yaml:"kubeconfig" json:"kubeconfig"`
+	Kconnect            KconnectConfig    `yaml:"kconnect" json:"kconnect"`
+	HealthCheckInterval string            `yaml:"health_check_interval" json:"health_check_interval"`
+	Enabled             bool              `yaml:"enabled" json:"enabled"`
+}
+
+func (c *ClusterConfig) NormalizeRegions() {
+	if len(c.Regions) == 0 {
+		if c.Region != "" {
+			if c.Region != "us-east-1" && c.Region != "us-east-2" {
+				c.Regions = []string{c.Region, "us-east-1", "us-east-2"}
+			} else {
+				c.Regions = []string{"us-east-1", "us-east-2"}
+			}
+		} else {
+			c.Regions = []string{"us-east-1", "us-east-2"}
+		}
+	}
+	if c.ActiveRegion == "" {
+		if c.Region != "" {
+			c.ActiveRegion = c.Region
+		} else if len(c.Regions) > 0 {
+			c.ActiveRegion = c.Regions[0]
+		} else {
+			c.ActiveRegion = "us-east-1"
+		}
+	}
+	if c.Region == "" {
+		c.Region = c.ActiveRegion
+	}
+	if c.RegionalContexts == nil {
+		c.RegionalContexts = make(map[string]string)
+	}
 }
 
 type KconnectConfig struct {
-	Enabled     bool              `yaml:"enabled"`
-	Command     string            `yaml:"command"`
-	Args        []string          `yaml:"args"`
-	AutoRefresh bool              `yaml:"auto_refresh"`
-	Env         map[string]string `yaml:"env"`
+	Enabled     bool              `yaml:"enabled" json:"enabled"`
+	Command     string            `yaml:"command" json:"command"`
+	Args        []string          `yaml:"args" json:"args"`
+	AutoRefresh bool              `yaml:"auto_refresh" json:"auto_refresh"`
+	Env         map[string]string `yaml:"env" json:"env"`
 }
 
 func (c ClusterConfig) GetEffectiveKubeconfigPath() string {
@@ -72,8 +105,8 @@ func (c ClusterConfig) ParseHealthCheckInterval() time.Duration {
 }
 
 type KubeconfigConfig struct {
-	Path    string `yaml:"path"`
-	Context string `yaml:"context"`
+	Path    string `yaml:"path" json:"path"`
+	Context string `yaml:"context" json:"context"`
 }
 
 type StreamingConfig struct {
@@ -245,7 +278,11 @@ func LoadConfig(path string) (*Config, error) {
 	if path == "" {
 		path = os.Getenv("LORA_CONFIG_PATH")
 		if path == "" {
-			path = "./configs/lora-config.yaml"
+			if _, err := os.Stat("./lora-config.yaml"); err == nil {
+				path = "./lora-config.yaml"
+			} else {
+				path = "./configs/lora-config.yaml"
+			}
 		}
 	}
 
@@ -314,6 +351,7 @@ func SaveConfig(path string, cfg *Config) error {
 }
 
 func (c *Config) AddOrUpdateCluster(cluster ClusterConfig) {
+	cluster.NormalizeRegions()
 	for i, existing := range c.Clusters {
 		if existing.ID == cluster.ID {
 			c.Clusters[i] = cluster
@@ -343,7 +381,9 @@ func (c *Config) Validate() error {
 	}
 
 	clusterIDs := make(map[string]bool)
-	for _, cluster := range c.Clusters {
+	for i := range c.Clusters {
+		cluster := &c.Clusters[i]
+		cluster.NormalizeRegions()
 		if cluster.ID == "" {
 			return fmt.Errorf("all clusters must have a non-empty id")
 		}

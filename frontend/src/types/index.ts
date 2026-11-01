@@ -4,10 +4,23 @@ export interface ClusterInfo {
   id: string;
   name: string;
   environment: string;
+  region?: string;
+  regions?: string[];
+  active_region?: string;
+  regional_contexts?: Record<string, string>;
+  context?: string;
   status: ClusterStatus;
   last_checked: string;
   error_message?: string;
   enabled: boolean;
+}
+
+export interface DiscoveredContext {
+  name: string;
+  cluster: string;
+  user: string;
+  region?: string;
+  server?: string;
 }
 
 export interface PodItem {
@@ -46,6 +59,7 @@ export interface ViewerTab {
   podName: string;
   container: string;
   previous: boolean;
+  sinceSeconds?: number;
   isPaused: boolean;
   autoScroll: boolean;
   filterText: string;
@@ -55,6 +69,7 @@ export interface ViewerTab {
   droppedCount: number;
   status: 'CONNECTING' | 'STREAMING' | 'PAUSED' | 'DISCONNECTED' | 'ERROR';
   errorMessage?: string;
+  selectedLog?: LogEntry | null;
 }
 
 export interface ConnectionInfo {

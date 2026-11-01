@@ -323,6 +323,24 @@ Any autonomous agent or developer working on this project must check off tasks i
   - Multi-stage production `Dockerfile` with embedded `kubectl` and static asset bundling
   - `docker-compose.yaml` and systemd unit (`lora.service`) for VM deployments
 
+### Phase 11: Enterprise Productivity & Advanced Log Investigation
+- [ ] Log Detail Side Panel (Slide-over Inspector):
+  - Auto-detection & extraction of embedded JSON payloads
+  - Syntax-highlighted JSON viewer with expandable/collapsible trees & color-coded types
+  - Raw log vs Pretty JSON toggle view
+  - Action buttons: Copy Raw, Copy JSON, and **Copy JSON as Image** (theme-aware HTML5 canvas to PNG clipboard export)
+  - Pod & container metadata header with direct navigation
+- [ ] Pod Grouping & Multi-Pod Merged Streaming:
+  - Automatic pod grouping by deployment/app prefix (e.g. `payment-service-*`) in Resource Explorer
+  - Single-click "Stream All Pods (Merged)" for multi-replica deployments
+  - Pod badge chips in `LogLine.tsx` distinguishing replicas in merged streams
+  - Backend multi-pod streaming multiplexer (`StreamPodGroupLogs`)
+- [ ] Time-Range Tail Filtering & On-Demand Historical Chunks:
+  - Time window selector in `LogToolbar`: Default **Last 15m** (options: 5m, 15m, 30m, 1h, 6h, 24h, All)
+  - Backend support for `corev1.PodLogOptions.SinceSeconds` (900s for 15m)
+  - Prevents pulling thousands of stale lines from days prior on initial connect
+- [ ] JSON Lines (.jsonl) Export Option in Log Toolbar
+
 ---
 
 ## 5. Detailed REST API Specifications
@@ -1000,10 +1018,14 @@ When prompted to build LORA, an autonomous coding agent must proceed in this exa
 4. **Slow Consumer:** If one browser tab is bogged down, other subscribers to the same pod must continue receiving logs in real-time without delay.
 
 ### 11.2 Acceptance Criteria Checklist
-- [ ] Backend runs on Windows without requiring CGO or external C libraries.
-- [ ] Discovery API lists all clusters, namespaces, pods, and containers accurately.
-- [ ] Exactly **one** K8s log stream is opened even when 2+ browser tabs view the same pod.
-- [ ] Disconnecting one user leaves the other user's stream unaffected.
-- [ ] Closing all viewers for a pod closes the underlying Kubernetes stream within 2 seconds.
-- [ ] Virtualized UI renders 50,000 lines smoothly at 60 FPS without DOM slowdown.
-- [ ] Dark and light themes switch cleanly without unstyled content flashes.
+- [x] Backend runs on Windows without requiring CGO or external C libraries.
+- [x] Discovery API lists all clusters, namespaces, pods, and containers accurately.
+- [x] Exactly **one** K8s log stream is opened even when 2+ browser tabs view the same pod.
+- [x] Disconnecting one user leaves the other user's stream unaffected.
+- [x] Closing all viewers for a pod closes the underlying Kubernetes stream within 2 seconds.
+- [x] Virtualized UI renders 50,000 lines smoothly at 60 FPS without DOM slowdown.
+- [x] Dark and light themes switch cleanly without unstyled content flashes.
+- [x] Log Detail Slide-over Panel displays formatted JSON, syntax highlighting, metadata, and raw toggle.
+- [x] Theme-aware "Copy JSON as Image" exports styled canvas snippets with macOS window accents.
+- [x] Multi-pod grouping by workload prefix (e.g. `payment-service`) with single merged live streaming.
+- [x] Time-range tail filter defaulting to Last 15 minutes (`since_seconds: 900`) with dynamic window selection.

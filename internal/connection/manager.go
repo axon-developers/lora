@@ -35,7 +35,7 @@ type Manager struct {
 	queueSize   int
 	defaultTail int64
 
-	streamFunc func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, prev bool, pc *PodConnection) error
+	streamFunc func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, sinceSeconds int64, prev bool, pc *PodConnection) error
 }
 
 func NewManager(maxEntries, maxBytes, queueSize int, defaultTail int64) *Manager {
@@ -61,7 +61,7 @@ func NewManager(maxEntries, maxBytes, queueSize int, defaultTail int64) *Manager
 	}
 }
 
-func (m *Manager) SetStreamFunc(fn func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, prev bool, pc *PodConnection) error) {
+func (m *Manager) SetStreamFunc(fn func(ctx context.Context, cs kubernetes.Interface, ns, pod, container string, tail int64, sinceSeconds int64, prev bool, pc *PodConnection) error) {
 	m.streamFunc = fn
 }
 
@@ -70,14 +70,22 @@ func (m *Manager) Subscribe(
 	cs kubernetes.Interface,
 	clusterID, ns, podName, podUID, container string,
 	previous bool,
+	tailLines int64,
+	sinceSeconds int64,
 	viewerID string,
 ) (*Subscriber, []LogEntry, string, error) {
+	effectiveTail := tailLines
+	if effectiveTail <= 0 {
+		effectiveTail = m.defaultTail
+	}
+
 	key := GenerateStreamKey(StreamKeyParams{
-		ClusterID: clusterID,
-		Namespace: ns,
-		PodUID:    podUID,
-		Container: container,
-		Previous:  previous,
+		ClusterID:    clusterID,
+		Namespace:    ns,
+		PodUID:       podUID,
+		Container:    container,
+		Previous:     previous,
+		SinceSeconds: sinceSeconds,
 	})
 
 	m.mu.RLock()
@@ -103,9 +111,9 @@ func (m *Manager) Subscribe(
 
 			// Launch background K8s stream consumer
 			go func() {
-				slog.Info("starting Kubernetes log stream", "key", key, "pod", podName, "container", container)
+				slog.Info("starting Kubernetes log stream", "key", key, "pod", podName, "container", container, "since", sinceSeconds)
 				if m.streamFunc != nil {
-					err := m.streamFunc(streamCtx, cs, ns, podName, container, m.defaultTail, previous, newPC)
+					err := m.streamFunc(streamCtx, cs, ns, podName, container, effectiveTail, sinceSeconds, previous, newPC)
 					if err != nil && err != context.Canceled {
 						slog.Error("kubernetes log stream encountered error", "key", key, "error", err)
 						newPC.SetState(StateFailed)

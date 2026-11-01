@@ -22,7 +22,7 @@ type KconnectResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
-func RunKconnect(ctx context.Context, c config.ClusterConfig, inputPassword, inputMFA string) (*KconnectResult, error) {
+func RunKconnect(ctx context.Context, c config.ClusterConfig, inputPassword, inputMFA, targetRegion string) (*KconnectResult, error) {
 	if !c.Kconnect.Enabled {
 		return nil, fmt.Errorf("kconnect is not enabled for cluster %s", c.ID)
 	}
@@ -53,6 +53,27 @@ func RunKconnect(ctx context.Context, c config.ClusterConfig, inputPassword, inp
 		args = append(args, "--kubeconfig", effectiveKubeconfig)
 	}
 
+	// Dynamic target region injection (e.g. us-east-1 vs us-east-2)
+	if targetRegion != "" {
+		regionUpdated := false
+		for i := 0; i < len(args); i++ {
+			if args[i] == "--region" || args[i] == "-r" {
+				if i+1 < len(args) {
+					args[i+1] = targetRegion
+					regionUpdated = true
+					break
+				}
+			} else if strings.HasPrefix(args[i], "--region=") {
+				args[i] = fmt.Sprintf("--region=%s", targetRegion)
+				regionUpdated = true
+				break
+			}
+		}
+		if !regionUpdated {
+			args = append(args, "--region", targetRegion)
+		}
+	}
+
 	if inputPassword != "" {
 		args = append(args, "--password", inputPassword)
 	}
@@ -67,6 +88,13 @@ func RunKconnect(ctx context.Context, c config.ClusterConfig, inputPassword, inp
 	cmd.Env = os.Environ()
 	for k, v := range c.Kconnect.Env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
+	if targetRegion != "" {
+		cmd.Env = append(cmd.Env,
+			fmt.Sprintf("AWS_DEFAULT_REGION=%s", targetRegion),
+			fmt.Sprintf("AWS_REGION=%s", targetRegion),
+			fmt.Sprintf("KCONNECT_REGION=%s", targetRegion),
+		)
 	}
 
 	var stdoutBuf, stderrBuf bytes.Buffer

@@ -11,6 +11,7 @@ interface ViewerState {
     podName: string;
     container: string;
     previous: boolean;
+    sinceSeconds?: number;
   }) => string;
 
   closeTab: (id: string) => void;
@@ -21,6 +22,8 @@ interface ViewerState {
   setFilter: (tabId: string, text: string) => void;
   clearLogs: (tabId: string) => void;
   setTabStatus: (tabId: string, status: ViewerTab['status'], errMsg?: string) => void;
+  setSelectedLog: (tabId: string, log: LogEntry | null) => void;
+  setSinceSeconds: (tabId: string, seconds: number) => void;
 }
 
 const MAX_CLIENT_LINES = 50000;
@@ -48,12 +51,13 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     const id = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const newTab: ViewerTab = {
       id,
-      title: `${params.podName}:${params.container}${params.previous ? ' (prev)' : ''}`,
+      title: `${params.podName.includes(',') ? 'group' : params.podName}:${params.container}${params.previous ? ' (prev)' : ''}`,
       clusterId: params.clusterId,
       namespace: params.namespace,
       podName: params.podName,
       container: params.container,
       previous: params.previous,
+      sinceSeconds: params.sinceSeconds ?? 900,
       isPaused: false,
       autoScroll: true,
       filterText: '',
@@ -62,6 +66,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       pausedQueue: [],
       droppedCount: 0,
       status: 'CONNECTING',
+      selectedLog: null,
     };
 
     set((state) => ({
@@ -182,6 +187,22 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === tabId ? { ...tab, status, errorMessage: errMsg } : tab
+      ),
+    }));
+  },
+
+  setSelectedLog: (tabId, log) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, selectedLog: log } : tab
+      ),
+    }));
+  },
+
+  setSinceSeconds: (tabId, seconds) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, sinceSeconds: seconds } : tab
       ),
     }));
   },

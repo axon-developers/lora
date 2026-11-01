@@ -26,10 +26,11 @@ type ClientMessage struct {
 	Namespace  string `json:"namespace,omitempty"`
 	PodName    string `json:"pod_name,omitempty"`
 	Container  string `json:"container,omitempty"`
-	Previous   bool   `json:"previous,omitempty"`
-	TailLines  int64  `json:"tail_lines,omitempty"`
-	Timestamps bool   `json:"timestamps,omitempty"`
-	Timestamp  int64  `json:"timestamp,omitempty"`
+	Previous     bool   `json:"previous,omitempty"`
+	TailLines    int64  `json:"tail_lines,omitempty"`
+	SinceSeconds *int64 `json:"since_seconds,omitempty"`
+	Timestamps   bool   `json:"timestamps,omitempty"`
+	Timestamp    int64  `json:"timestamp,omitempty"`
 }
 
 type ServerMessage struct {

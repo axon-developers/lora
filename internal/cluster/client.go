@@ -21,26 +21,35 @@ const (
 )
 
 type ClusterInfo struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Environment  string    `json:"environment"`
-	Status       Status    `json:"status"`
-	LastChecked  time.Time `json:"last_checked"`
-	ErrorMessage string    `json:"error_message,omitempty"`
-	Enabled      bool      `json:"enabled"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Environment      string            `json:"environment"`
+	Region           string            `json:"region,omitempty"`
+	Regions          []string          `json:"regions,omitempty"`
+	ActiveRegion     string            `json:"active_region,omitempty"`
+	RegionalContexts map[string]string `json:"regional_contexts,omitempty"`
+	Context          string            `json:"context,omitempty"`
+	Status           Status            `json:"status"`
+	LastChecked      time.Time         `json:"last_checked"`
+	ErrorMessage     string            `json:"error_message,omitempty"`
+	Enabled          bool              `json:"enabled"`
 }
 
 type Client struct {
-	mu           sync.RWMutex
-	ID           string
-	Name         string
-	Environment  string
-	ConfigPath   string
-	Context      string
-	Enabled      bool
-	Status       Status
-	LastChecked  time.Time
-	ErrorMessage string
+	mu               sync.RWMutex
+	ID               string
+	Name             string
+	Environment      string
+	Region           string
+	Regions          []string
+	ActiveRegion     string
+	RegionalContexts map[string]string
+	ConfigPath       string
+	Context          string
+	Enabled          bool
+	Status           Status
+	LastChecked      time.Time
+	ErrorMessage     string
 
 	RestConfig *rest.Config
 	Clientset  kubernetes.Interface
@@ -51,13 +60,18 @@ func (c *Client) GetStatus() ClusterInfo {
 	defer c.mu.RUnlock()
 
 	return ClusterInfo{
-		ID:           c.ID,
-		Name:         c.Name,
-		Environment:  c.Environment,
-		Status:       c.Status,
-		LastChecked:  c.LastChecked,
-		ErrorMessage: c.ErrorMessage,
-		Enabled:      c.Enabled,
+		ID:               c.ID,
+		Name:             c.Name,
+		Environment:      c.Environment,
+		Region:           c.Region,
+		Regions:          c.Regions,
+		ActiveRegion:     c.ActiveRegion,
+		RegionalContexts: c.RegionalContexts,
+		Context:          c.Context,
+		Status:           c.Status,
+		LastChecked:      c.LastChecked,
+		ErrorMessage:     c.ErrorMessage,
+		Enabled:          c.Enabled,
 	}
 }
 

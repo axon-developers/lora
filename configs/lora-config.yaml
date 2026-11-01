@@ -7,62 +7,25 @@ server:
 database:
     path: ./data/lora.db
 clusters:
-    - id: dev
-      name: Development Cluster
+    - id: local-kind
+      name: Local Kind (Podman Cluster)
       environment: development
-      managed_kubeconfig: true
+      region: us-east-1
+      regions:
+        - us-east-1
+        - us-east-2
+      active_region: us-east-1
+      managed_kubeconfig: false
       kubeconfig:
-        path: ""
-        context: ""
+        path: ./data/kubeconfigs/local-kind.config
+        context: kind-lora-test
       kconnect:
-        enabled: true
+        enabled: false
         command: kconnect
-        args:
-            - use
-            - eks
-            - --cluster
-            - dev-eks-cluster
-        auto_refresh: true
-        env: {}
-      health_check_interval: 30s
-      enabled: true
-    - id: staging
-      name: Staging Cluster
-      environment: staging
-      managed_kubeconfig: true
-      kubeconfig:
-        path: ""
-        context: ""
-      kconnect:
-        enabled: true
-        command: kconnect
-        args:
-            - use
-            - eks
-            - --cluster
-            - staging-eks-cluster
-        auto_refresh: true
-        env: {}
-      health_check_interval: 30s
-      enabled: true
-    - id: prod
-      name: Production Cluster
-      environment: production
-      managed_kubeconfig: true
-      kubeconfig:
-        path: ""
-        context: ""
-      kconnect:
-        enabled: true
-        command: kconnect
-        args:
-            - use
-            - eks
-            - --cluster
-            - prod-eks-cluster
+        args: []
         auto_refresh: false
         env: {}
-      health_check_interval: 60s
+      health_check_interval: 15s
       enabled: true
 streaming:
     default_tail_lines: 500
@@ -85,3 +48,50 @@ viewer:
 display:
     default_theme: dark
     default_timestamp_format: local_absolute
+auth:
+    enabled: false
+    provider: none
+    azure_ad:
+        tenant_id: ""
+        client_id: ""
+        client_secret: ""
+        redirect_url: ""
+        scopes:
+            - openid
+            - profile
+            - email
+    jwt_secret: lora-secret-key-change-in-prod
+    session_ttl: 24h
+    admin_roles:
+        - admin
+s3_export:
+    enabled: false
+    bucket: test-bucket
+    region: us-east-1
+    prefix: lora-exports/
+    endpoint: ""
+    access_key_id: ""
+    secret_access_key: ""
+    use_iam_role: true
+redaction:
+    enabled: true
+    rules:
+        - id: aws-key
+          name: AWS Access Key
+          pattern: AKIA[0-9A-Z]{16}
+          mask: '[REDACTED_AWS_KEY]'
+          enabled: true
+        - id: bearer-token
+          name: Bearer Token
+          pattern: Bearer\s+[a-zA-Z0-9_\-\.]{15,}
+          mask: Bearer [REDACTED_TOKEN]
+          enabled: true
+        - id: password-key
+          name: Password in URI / KV
+          pattern: (?i)(password|passwd|secret)\s*[:=]\s*["']?([^"' \t\r\n]{4,})["']?
+          mask: $1=[REDACTED]
+          enabled: true
+features:
+    multi_container_merge: true
+    pod_groups: true
+    pod_events: true

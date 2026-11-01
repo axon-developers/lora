@@ -95,11 +95,13 @@ func NewRouter(
 			// Clusters & Kconnect
 			r.Get("/clusters", clusterHandler.ListClusters)
 			r.Post("/clusters", clusterHandler.AddCluster)
+			r.Post("/clusters/discover-contexts", clusterHandler.DiscoverContexts)
 			r.Get("/clusters/{id}/config", clusterHandler.GetClusterConfig)
 			r.Put("/clusters/{id}", clusterHandler.UpdateCluster)
 			r.Delete("/clusters/{id}", clusterHandler.DeleteCluster)
 			r.Post("/clusters/{id}/reconnect", clusterHandler.ReconnectCluster)
 			r.Post("/clusters/{id}/kconnect/execute", clusterHandler.ExecuteKconnect)
+			r.Post("/clusters/{id}/switch-region", clusterHandler.SwitchRegion)
 
 			// Discovery & Events
 			r.Get("/clusters/{id}/namespaces", discoveryHandler.ListNamespaces)

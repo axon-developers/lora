@@ -38,6 +38,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  async discoverContexts(kubeconfigPath?: string): Promise<{ success: boolean; contexts: import('../types').DiscoveredContext[] }> {
+    const res = await fetch(`${BASE_URL}/clusters/discover-contexts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kubeconfig_path: kubeconfigPath || '' }),
+    });
+    return handleResponse(res);
+  },
+
   async addCluster(clusterData: any): Promise<any> {
     const res = await fetch(`${BASE_URL}/clusters`, {
       method: 'POST',
@@ -77,11 +86,20 @@ export const api = {
     return handleResponse(res);
   },
 
-  async executeKconnect(clusterId: string, password?: string, mfaCode?: string): Promise<any> {
+  async executeKconnect(clusterId: string, password?: string, mfaCode?: string, region?: string): Promise<any> {
     const res = await fetch(`${BASE_URL}/clusters/${encodeURIComponent(clusterId)}/kconnect/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, mfa_code: mfaCode }),
+      body: JSON.stringify({ password, mfa_code: mfaCode, region }),
+    });
+    return handleResponse(res);
+  },
+
+  async switchRegion(clusterId: string, region: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/clusters/${encodeURIComponent(clusterId)}/switch-region`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ region }),
     });
     return handleResponse(res);
   },

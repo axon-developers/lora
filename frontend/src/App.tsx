@@ -79,7 +79,7 @@ export const App: React.FC = () => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   return (
-    <div className={`h-screen w-screen flex flex-col bg-slate-950 text-slate-100 ${isDark ? 'dark' : 'light'}`}>
+    <div className={`h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 ${isDark ? 'dark' : 'light'}`}>
       <Header
         onOpenMonitor={() => setIsMonitorOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -93,16 +93,16 @@ export const App: React.FC = () => {
         <ResourceExplorer onOpenClusterManager={() => setIsClusterManagerOpen(true)} />
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
           <TabBar />
 
           {clusters.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none bg-slate-950">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-center mb-4 text-indigo-400 shadow-xl shadow-indigo-950/50">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none bg-slate-50 dark:bg-slate-950">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center mb-4 text-indigo-600 dark:text-indigo-400 shadow-xl shadow-indigo-500/10 dark:shadow-indigo-950/50">
                 <Server className="w-8 h-8" />
               </div>
-              <h2 className="text-base font-bold text-slate-100 mb-2">Welcome to LORA</h2>
-              <p className="text-xs text-slate-400 max-w-md font-mono mb-6 leading-relaxed">
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2">Welcome to LORA</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md font-mono mb-6 leading-relaxed">
                 No Kubernetes clusters are configured yet. You can configure and connect your clusters directly through the UI without touching YAML files or restarting the server.
               </p>
               <button
@@ -116,15 +116,15 @@ export const App: React.FC = () => {
           ) : activeTab ? (
             <LogViewer key={activeTab.id} tab={activeTab} />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none">
-              <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-3 text-indigo-400 shadow-inner">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-slate-50 dark:bg-slate-950">
+              <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center mb-3 text-indigo-600 dark:text-indigo-400 shadow-sm dark:shadow-inner">
                 <Terminal className="w-6 h-6" />
               </div>
-              <h2 className="text-sm font-semibold text-slate-200 mb-1">No Active Pod Stream</h2>
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">No Active Pod Stream</h2>
               <p className="text-xs text-slate-500 max-w-sm font-mono mb-4">
                 Select a cluster, namespace, pod, and click "Live" on a container to start streaming real-time logs.
               </p>
-              <div className="flex items-center gap-3 text-[11px] text-slate-600 font-mono">
+              <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-600 font-mono">
                 <span>[Space] Pause/Resume</span>
                 <span>•</span>
                 <span>[Ctrl+W] Close Tab</span>

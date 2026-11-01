@@ -2,9 +2,11 @@ package streaming
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -196,22 +198,40 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Resolve Pod UID
-			podMetaCtx, cancelPodMeta := context.WithTimeout(ctx, 10*time.Second)
-			podObj, err := clusterClient.Clientset.CoreV1().Pods(req.Namespace).Get(podMetaCtx, req.PodName, metav1.GetOptions{})
-			cancelPodMeta()
-			if err != nil {
-				_ = writeJSON(ServerMessage{
-					Type:      MsgTypeSubscriptionError,
-					RequestID: req.RequestID,
-					ViewerID:  req.ViewerID,
-					Code:      "POD_NOT_FOUND",
-					Message:   fmt.Sprintf("Failed to resolve pod %s in namespace %s: %v", req.PodName, req.Namespace, err),
-				})
-				continue
+			// Determine sinceSeconds:
+			// If not provided (nil), default to 900 (15 minutes).
+			// If provided and <= 0, treat as 0 (all logs).
+			// If > 0, use specified value.
+			var effectiveSinceSeconds int64 = 900
+			if req.SinceSeconds != nil {
+				if *req.SinceSeconds <= 0 {
+					effectiveSinceSeconds = 0
+				} else {
+					effectiveSinceSeconds = *req.SinceSeconds
+				}
 			}
 
-			podUID := string(podObj.UID)
+			// Resolve Pod UID
+			var podUID string
+			if strings.Contains(req.PodName, ",") {
+				hash := sha256.Sum256([]byte(req.PodName))
+				podUID = fmt.Sprintf("group-%x", hash[:8])
+			} else {
+				podMetaCtx, cancelPodMeta := context.WithTimeout(ctx, 10*time.Second)
+				podObj, err := clusterClient.Clientset.CoreV1().Pods(req.Namespace).Get(podMetaCtx, req.PodName, metav1.GetOptions{})
+				cancelPodMeta()
+				if err != nil {
+					_ = writeJSON(ServerMessage{
+						Type:      MsgTypeSubscriptionError,
+						RequestID: req.RequestID,
+						ViewerID:  req.ViewerID,
+						Code:      "POD_NOT_FOUND",
+						Message:   fmt.Sprintf("Failed to resolve pod %s in namespace %s: %v", req.PodName, req.Namespace, err),
+					})
+					continue
+				}
+				podUID = string(podObj.UID)
+			}
 
 			// Subscribe to shared connection
 			sub, replay, streamKey, err := h.connMgr.Subscribe(
@@ -223,6 +243,8 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 				podUID,
 				req.Container,
 				req.Previous,
+				req.TailLines,
+				effectiveSinceSeconds,
 				req.ViewerID,
 			)
 

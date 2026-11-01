@@ -23,7 +23,7 @@ class LogWebSocketManager {
         this.activeSubscriptions.clear();
 
         tabs.forEach((tab) => {
-          this.subscribe(tab.id, tab.clusterId, tab.namespace, tab.podName, tab.container, tab.previous);
+          this.subscribe(tab.id, tab.clusterId, tab.namespace, tab.podName, tab.container, tab.previous, tab.sinceSeconds);
         });
       };
 
@@ -80,7 +80,7 @@ class LogWebSocketManager {
     }
   }
 
-  subscribe(viewerId: string, clusterId: string, namespace: string, podName: string, container: string, previous = false) {
+  subscribe(viewerId: string, clusterId: string, namespace: string, podName: string, container: string, previous = false, sinceSeconds?: number) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -95,6 +95,7 @@ class LogWebSocketManager {
       container,
       previous,
       tail_lines: 500,
+      since_seconds: sinceSeconds !== undefined ? sinceSeconds : 900,
       timestamps: true,
     };
 

@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lora-demo
+---
+# 1. High-Volume Service with INFO, WARN, ERROR, DEBUG
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: lora-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+        - name: payment-api
+          image: alpine:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              COUNT=1
+              while true; do
+                MOD=$((COUNT % 4))
+                TS=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+                AMT=$(($RANDOM % 500 + 10))
+                if [ $MOD -eq 0 ]; then
+                  echo "{\"timestamp\":\"$TS\",\"level\":\"info\",\"service\":\"payment-service\",\"pod\":\"payment-api\",\"trace_id\":\"trc_$(($RANDOM % 90000 + 10000))\",\"event\":\"payment_processed\",\"transaction\":{\"id\":\"tx_$COUNT\",\"amount\":$AMT.50,\"currency\":\"USD\",\"status\":\"SUCCESS\"},\"customer\":{\"id\":\"cust_$((COUNT % 100))\",\"tier\":\"gold\"},\"duration_ms\":34}"
+                elif [ $MOD -eq 1 ]; then
+                  echo "{\"timestamp\":\"$TS\",\"level\":\"warn\",\"service\":\"payment-service\",\"pod\":\"payment-api\",\"trace_id\":\"trc_$(($RANDOM % 90000 + 10000))\",\"event\":\"gateway_slowdown\",\"merchant_id\":\"mch_$COUNT\",\"latency_ms\":$(($RANDOM % 800 + 400)),\"retry_count\":2,\"warning\":\"threshold_exceeded\"}"
+                elif [ $MOD -eq 2 ]; then
+                  echo "{\"timestamp\":\"$TS\",\"level\":\"error\",\"service\":\"payment-service\",\"pod\":\"payment-api\",\"trace_id\":\"trc_$(($RANDOM % 90000 + 10000))\",\"event\":\"payment_failed\",\"charge_id\":\"ch_$COUNT\",\"error_code\":\"CARD_DECLINED\",\"reason\":\"INSUFFICIENT_FUNDS\",\"recoverable\":false}"
+                else
+                  echo "$TS [DEBUG] payment-api: Cache hit for currency exchange rate USD_EUR ttl=280s seq=$COUNT"
+                fi
+                COUNT=$((COUNT + 1))
+                sleep 1.5
+              done
+---
+# 2. V2 Multi-Container Pod (Proxy + Backend App)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: auth-gateway-pod
+  namespace: lora-demo
+  labels:
+    app: auth-gateway
+spec:
+  containers:
+    - name: proxy
+      image: alpine:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          I=1
+          while true; do
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+            if [ $((I % 3)) -eq 0 ]; then
+              echo "$TS [WARN] proxy: 429 Too Many Requests from client_ip=192.168.1.$((I % 50)) endpoint=/api/v1/auth"
+            else
+              echo "$TS [INFO] proxy: 200 OK GET /api/v1/auth/session duration=12ms"
+            fi
+            I=$((I + 1))
+            sleep 2
+          done
+
+    - name: backend
+      image: alpine:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          J=1
+          while true; do
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+            echo "$TS [INFO] backend: Validating OIDC bearer token for user_id=usr_$J"
+            if [ $((J % 4)) -eq 0 ]; then
+              echo "$TS [WARN] backend: Token expiring in 45 seconds for user_id=usr_$J"
+            fi
+            J=$((J + 1))
+            sleep 2.5
+          done
+---
+# 3. V2 CrashLoopBackOff Pod (to test Pod Events Drawer)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: order-worker-failing
+  namespace: lora-demo
+  labels:
+    app: order-worker
+spec:
+  restartPolicy: Always
+  containers:
+    - name: worker
+      image: alpine:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          echo "$TS [INFO] order-worker: Initializing batch consumer for queue=orders-priority"
+          sleep 3
+          echo "$TS [WARN] order-worker: Memory usage at 91% (182MB / 200MB limit)"
+          sleep 2
+          echo "$TS [ERROR] order-worker: Fatal panic: unhandled nil pointer dereference in order_processor.go:88"
+          sleep 1
+          echo "$TS [FATAL] order-worker: Process terminated unexpectedly (exit code 1)"
+          exit 1
+---
+# 4. Sensitive Data Pod (to test Redaction Engine)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inventory-service
+  namespace: lora-demo
+  labels:
+    app: inventory-service
+spec:
+  containers:
+    - name: inventory-api
+      image: alpine:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          K=1
+          while true; do
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+            echo "$TS [INFO] inventory: Connected to AWS S3 bucket using AKIAIOSFODNN7EXAMPLE in region us-east-1"
+            sleep 2
+            echo "$TS [INFO] inventory: Syncing warehouse inventory authorization Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummySignatureKey"
+            sleep 2
+            echo "$TS [DEBUG] inventory: Database connection string postgresql://user:SuperSecretPassword123@db.internal:5432/inventory"
+            sleep 3
+            K=$((K + 1))
+          done
+

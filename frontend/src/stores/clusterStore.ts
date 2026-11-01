@@ -25,7 +25,8 @@ interface ClusterState {
   selectPod: (podName: string) => Promise<void>;
   selectContainer: (container: string, isPrevious?: boolean) => void;
   reconnectCluster: (id: string) => Promise<void>;
-  executeKconnect: (id: string, password?: string, mfaCode?: string) => Promise<void>;
+  executeKconnect: (id: string, password?: string, mfaCode?: string, region?: string) => Promise<void>;
+  switchRegion: (id: string, region: string) => Promise<void>;
 }
 
 export const useClusterStore = create<ClusterState>((set, get) => ({
@@ -155,10 +156,10 @@ export const useClusterStore = create<ClusterState>((set, get) => ({
     }
   },
 
-  executeKconnect: async (id: string, password?: string, mfaCode?: string) => {
+  executeKconnect: async (id: string, password?: string, mfaCode?: string, region?: string) => {
     set({ errorMessage: null });
     try {
-      await api.executeKconnect(id, password, mfaCode);
+      await api.executeKconnect(id, password, mfaCode, region);
       await get().fetchClusters();
       if (get().selectedClusterId === id) {
         const ns = get().selectedNamespace;
@@ -170,6 +171,25 @@ export const useClusterStore = create<ClusterState>((set, get) => ({
       }
     } catch (err: any) {
       set({ errorMessage: err.message || 'Kconnect execution failed' });
+      throw err;
+    }
+  },
+
+  switchRegion: async (id: string, region: string) => {
+    set({ errorMessage: null });
+    try {
+      await api.switchRegion(id, region);
+      await get().fetchClusters();
+      if (get().selectedClusterId === id) {
+        const ns = get().selectedNamespace;
+        if (ns) {
+          get().selectNamespace(ns);
+        } else {
+          get().selectCluster(id);
+        }
+      }
+    } catch (err: any) {
+      set({ errorMessage: err.message || 'Failed to switch region' });
       throw err;
     }
   },
