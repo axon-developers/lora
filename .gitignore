@@ -1,0 +1,37 @@
+# Binaries
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Data & database
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Frontend build & dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets & local config
+*.kube/
+*kubeconfig*
+!configs/lora-config.example.yaml
+

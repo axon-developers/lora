@@ -1,0 +1,114 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+
+database:
+  path: "./data/lora.db"
+
+clusters:
+  - id: "dev"
+    name: "Development Cluster"
+    environment: "development"
+    managed_kubeconfig: true
+    kubeconfig:
+      path: ""
+      context: ""
+    kconnect:
+      enabled: true
+      command: "kconnect"
+      args:
+        - "use"
+        - "eks"
+        - "--cluster"
+        - "dev-eks-cluster"
+      auto_refresh: true
+    health_check_interval: "30s"
+    enabled: true
+
+streaming:
+  default_tail_lines: 500
+  ring_buffer_max_entries: 1000
+  ring_buffer_max_bytes: 2097152
+  total_memory_budget: 209715200
+  subscriber_queue_size: 500
+  max_streams_per_user: 5
+  max_subscribers_per_stream: 50
+
+websocket:
+  batch_interval_ms: 200
+  max_message_size: 262144
+  heartbeat_interval_s: 30
+
+viewer:
+  max_tabs_soft_limit: 10
+  max_tabs_hard_limit: 20
+  pause_queue_max_entries: 5000
+  pause_queue_max_bytes: 5242880
+  client_max_log_lines: 50000
+
+display:
+  default_theme: "dark"
+  default_timestamp_format: "local_absolute"
+
+# ========================================================
+# Version 2 Platform Features (Optional Enablement)
+# ========================================================
+
+# Azure AD (Entra ID) / OIDC Single Sign-On
+auth:
+  enabled: false # Set true to enforce Azure AD authentication
+  provider: "azure_ad" # Options: "none", "azure_ad", "oidc"
+  jwt_secret: "lora-jwt-default-secret-key-change-in-prod"
+  session_ttl: "24h"
+  admin_roles:
+    - "lora-admin"
+    - "admin"
+  azure_ad:
+    tenant_id: ""
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:8080/api/v1/auth/callback"
+    scopes:
+      - "openid"
+      - "profile"
+      - "email"
+
+# On-Demand S3 Log Export
+s3_export:
+  enabled: false # Set true to enable direct exports to S3
+  bucket: "my-lora-logs-bucket"
+  region: "us-east-1"
+  prefix: "lora-exports/"
+  endpoint: "" # Optional custom S3/MinIO endpoint
+  use_iam_role: true # If true, uses AWS instance profile/ambient credentials
+  access_key_id: ""
+  secret_access_key: ""
+
+# Log Redaction & Masking Patterns
+redaction:
+  enabled: false # Set true to mask sensitive data in streams and exports
+  rules:
+    - id: "aws-key"
+      name: "AWS Access Key"
+      pattern: 'AKIA[0-9A-Z]{16}'
+      mask: "[REDACTED_AWS_KEY]"
+      enabled: true
+    - id: "bearer-token"
+      name: "Bearer Token / JWT"
+      pattern: 'Bearer\s+[a-zA-Z0-9_\-\.]{20,}'
+      mask: "Bearer [REDACTED_TOKEN]"
+      enabled: true
+    - id: "password-key"
+      name: "Password in Key-Value"
+      pattern: '(?i)(password|passwd|secret|token)\s*[:=]\s*["'']?([^"'' \t\r\n]{4,})["'']?'
+      mask: "$1=[REDACTED]"
+      enabled: true
+
+# Feature Toggles
+features:
+  multi_container_merge: true
+  pod_groups: true
+  pod_events: true

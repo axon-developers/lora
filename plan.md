@@ -48,6 +48,12 @@ Subscriber Queue A (User 1 - Tab 1)   Subscriber Queue B (User 2 - Tab 3)
 * **Never** block the shared stream reader if a single subscriber is slow or paused.
 * **Key Pods by Pod UID**, never pod name alone, to prevent pod recreation race conditions.
 
+### 1.4 UI-First Configuration & Zero-Cluster Startup
+* **Zero-Cluster Graceful Boot:** If no configuration file or 0 clusters exist, LORA boots up normally, serves the web UI, and displays an onboarding screen allowing users to configure clusters via forms.
+* **Full UI Configuration Control:** All cluster definitions (names, environments, kubeconfig modes, and kconnect arguments) and server/streaming parameters can be added, updated, tested, and deleted directly in the browser.
+* **Dual Persistence:** Configuration changes in the UI are atomically saved to both SQLite (`app_settings` table) and the disk file (`lora-config.yaml`).
+* **Hot-Reload & In-App Restart:** Adding or editing clusters takes effect dynamically in-memory without server restart; an in-app "Restart Server" action is available whenever full process restart is desired.
+
 ---
 
 ## 2. Complete Technology Stack & Dependencies
@@ -96,27 +102,59 @@ clusters:
   - id: "dev"
     name: "Development Cluster"
     environment: "development"
+    managed_kubeconfig: true # LORA automatically manages file at ./data/kubeconfigs/dev.config
     kubeconfig:
-      path: "C:/Users/siva1/.kube/dev-config"
-      context: "" # Empty means use default context
+      path: "" # Leave empty if managed_kubeconfig is true, or specify custom path
+      context: ""
+    kconnect:
+      enabled: true
+      command: "kconnect" # Path to kconnect executable or in system PATH
+      args:
+        - "use"
+        - "eks"
+        - "--cluster"
+        - "dev-eks-cluster"
+      auto_refresh: true # Automatically runs kconnect when token expires
+      env:
+        AWS_REGION: "ap-south-1"
     health_check_interval: "30s"
     enabled: true
 
   - id: "staging"
     name: "Staging Cluster"
     environment: "staging"
+    managed_kubeconfig: true
     kubeconfig:
-      path: "C:/Users/siva1/.kube/staging-config"
+      path: ""
       context: ""
+    kconnect:
+      enabled: true
+      command: "kconnect"
+      args:
+        - "use"
+        - "eks"
+        - "--cluster"
+        - "staging-eks-cluster"
+      auto_refresh: true
     health_check_interval: "30s"
     enabled: true
 
   - id: "prod"
     name: "Production Cluster"
     environment: "production"
+    managed_kubeconfig: true
     kubeconfig:
-      path: "C:/Users/siva1/.kube/prod-config"
+      path: ""
       context: ""
+    kconnect:
+      enabled: true
+      command: "kconnect"
+      args:
+        - "use"
+        - "eks"
+        - "--cluster"
+        - "prod-eks-cluster"
+      auto_refresh: false # Requires explicit user click/confirmation in UI before renewing prod token
     health_check_interval: "60s"
     enabled: true
 
@@ -153,104 +191,137 @@ display:
 Any autonomous agent or developer working on this project must check off tasks in this list as they are completed.
 
 ### Phase 1: Project Scaffolding & Configuration
-- [ ] Initialize Go module (`go mod init lora`)
-- [ ] Configure directory structure (`cmd/lora`, `internal/...`, `frontend/...`, `configs/...`, `data/`)
-- [ ] Implement `internal/config/config.go` (YAML parsing, validation, path normalization)
-- [ ] Implement `internal/logging/logger.go` with structured `log/slog` output
-- [ ] Implement `internal/database/db.go` with pure-Go SQLite initialization, WAL mode, migrations
-- [ ] Create `internal/database/migrations/001_initial.sql` for `app_settings`
-- [ ] Implement basic HTTP server in `cmd/lora/main.go` with Chi router, CORS, and health endpoints (`/healthz`, `/readyz`)
-- [ ] Verify Go compilation and local health check response on Windows
+- [x] Initialize Go module (`go mod init lora`)
+- [x] Configure directory structure (`cmd/lora`, `internal/...`, `frontend/...`, `configs/...`, `data/`)
+- [x] Implement `internal/config/config.go` (YAML parsing, validation, path normalization)
+- [x] Implement `internal/logging/logger.go` with structured `log/slog` output
+- [x] Implement `internal/database/db.go` with pure-Go SQLite initialization, WAL mode, migrations
+- [x] Create `internal/database/migrations/001_initial.sql` for `app_settings`
+- [x] Implement basic HTTP server in `cmd/lora/main.go` with Chi router, CORS, and health endpoints (`/healthz`, `/readyz`)
+- [x] Verify Go compilation and local health check response on Windows
 
 ### Phase 2: Kubeconfig Loading & Cluster Client Manager
-- [ ] Implement `internal/cluster/kubeconfig.go` (safe path resolution, validation of kubeconfig on Windows)
-- [ ] Implement `internal/cluster/client.go` (wrapping `client-go/kubernetes`, `clientcmd.BuildConfigFromFlags`)
-- [ ] Implement `internal/cluster/health.go` (background periodic ping `discoveryClient.ServerVersion()`)
-- [ ] Implement `internal/cluster/manager.go` (lifecycle, cluster map, thread-safe reload)
-- [ ] Implement `POST /api/v1/clusters/{id}/reconnect` to reload updated kubeconfigs on the fly
-- [ ] Unit tests for multi-cluster configuration and safe reloading
+- [x] Implement `internal/cluster/kubeconfig.go` (safe path resolution, validation of kubeconfig on Windows)
+- [x] Implement `internal/cluster/client.go` (wrapping `client-go/kubernetes`, `clientcmd.BuildConfigFromFlags`)
+- [x] Implement `internal/cluster/health.go` (background periodic ping `discoveryClient.ServerVersion()`)
+- [x] Implement `internal/cluster/manager.go` (lifecycle, cluster map, thread-safe reload)
+- [x] Implement `POST /api/v1/clusters/{id}/reconnect` to reload updated kubeconfigs on the fly
+- [x] Unit tests for multi-cluster configuration and safe reloading
 
 ### Phase 3: Kubernetes Resource Discovery API
-- [ ] Implement `internal/kubernetes/namespaces.go` (list namespaces with context timeout)
-- [ ] Implement `internal/kubernetes/pods.go` (list pods, extract status, phase, restart counts, age, Pod UID)
-- [ ] Implement `internal/kubernetes/containers.go` (list regular, init, and previous container states)
-- [ ] Implement REST handlers in `internal/api/handlers/`:
-  - [ ] `GET /api/v1/clusters`
-  - [ ] `GET /api/v1/clusters/{id}/namespaces`
-  - [ ] `GET /api/v1/clusters/{id}/namespaces/{ns}/pods`
-  - [ ] `GET /api/v1/clusters/{id}/namespaces/{ns}/pods/{pod}/containers`
-- [ ] Handle Kubernetes 401 Unauthorized errors and map to `CLUSTER_AUTH_EXPIRED` structured error
+- [x] Implement `internal/kubernetes/namespaces.go` (list namespaces with context timeout)
+- [x] Implement `internal/kubernetes/pods.go` (list pods, extract status, phase, restart counts, age, Pod UID)
+- [x] Implement `internal/kubernetes/containers.go` (list regular, init, and previous container states)
+- [x] Implement REST handlers in `internal/api/handlers/`:
+  - [x] `GET /api/v1/clusters`
+  - [x] `GET /api/v1/clusters/{id}/namespaces`
+  - [x] `GET /api/v1/clusters/{id}/namespaces/{ns}/pods`
+  - [x] `GET /api/v1/clusters/{id}/namespaces/{ns}/pods/{pod}/containers`
+- [x] Handle Kubernetes 401 Unauthorized errors and map to `CLUSTER_AUTH_EXPIRED` structured error
 
 ### Phase 4: Single-Pod Log Streaming (WebSocket)
-- [ ] Implement `internal/kubernetes/logs.go` using `corev1.PodLogOptions` (`Follow: true`, `TailLines: 500`, `Timestamps: true`)
-- [ ] Support `Previous: true` container logs
-- [ ] Implement `internal/streaming/protocol.go` (JSON payloads for WS messages)
-- [ ] Implement `internal/streaming/websocket.go` (`nhooyr.io/websocket` upgrader, read/write loops, ping/pong heartbeat)
-- [ ] Create basic direct streaming pipeline from pod reader to WebSocket client
-- [ ] Test end-to-end streaming against a live pod using a CLI test client or Postman
+- [x] Implement `internal/kubernetes/logs.go` using `corev1.PodLogOptions` (`Follow: true`, `TailLines: 500`, `Timestamps: true`)
+- [x] Support `Previous: true` container logs
+- [x] Implement `internal/streaming/protocol.go` (JSON payloads for WS messages)
+- [x] Implement `internal/streaming/websocket.go` (`nhooyr.io/websocket` upgrader, read/write loops, ping/pong heartbeat)
+- [x] Create basic direct streaming pipeline from pod reader to WebSocket client
+- [x] Test end-to-end streaming against a live pod using a CLI test client or Postman
 
 ### Phase 5: Shared Connection Manager & Fan-Out Engine
-- [ ] Implement `internal/connection/key.go` with normalized stream key generation:
+- [x] Implement `internal/connection/key.go` with normalized stream key generation:
   `Key = fmt.Sprintf("%s:%s:%s:%s:prev=%t", clusterID, ns, podUID, container, previous)`
-- [ ] Implement `internal/connection/buffer.go` (circular ring buffer capped by 1,000 entries and 2MB)
-- [ ] Implement `internal/connection/subscriber.go` (subscriber representation, bounded channel `chan LogEntry`, drop detection)
-- [ ] Implement `internal/connection/broadcaster.go` (fan-out loop with non-blocking sends and drop counter)
-- [ ] Implement `internal/connection/manager.go` using `singleflight.Group` to prevent duplicate concurrent K8s requests
-- [ ] Implement safe teardown: when subscribers reach 0, cancel K8s context and release resources
-- [ ] Concurrency unit tests with Go race detector (`go test -race ./internal/connection/...`)
+- [x] Implement `internal/connection/buffer.go` (circular ring buffer capped by 1,000 entries and 2MB)
+- [x] Implement `internal/connection/subscriber.go` (subscriber representation, bounded channel `chan LogEntry`, drop detection)
+- [x] Implement `internal/connection/broadcaster.go` (fan-out loop with non-blocking sends and drop counter)
+- [x] Implement `internal/connection/manager.go` using `singleflight.Group` to prevent duplicate concurrent K8s requests
+- [x] Implement safe teardown: when subscribers reach 0, cancel K8s context and release resources
+- [x] Concurrency unit tests with Go race detector (`go test -race ./internal/connection/...`)
 
 ### Phase 6: Frontend Shell & Resource Explorer
-- [ ] Initialize React + TypeScript project with Vite in `./frontend`
-- [ ] Configure Tailwind CSS and dark/light theme provider
-- [ ] Create layout: Header (cluster badge, theme toggle), Sidebar (explorer), Main Pane (viewer/admin)
-- [ ] Implement `ClusterSelector.tsx` with live status indicator (🟢 Running / 🔴 Auth Expired / 🟡 Unreachable)
-- [ ] Implement `NamespaceSelector.tsx` with quick filter search
-- [ ] Implement `PodList.tsx` displaying:
+- [x] Initialize React + TypeScript project with Vite in `./frontend`
+- [x] Configure Tailwind CSS and dark/light theme provider
+- [x] Create layout: Header (cluster badge, theme toggle), Sidebar (explorer), Main Pane (viewer/admin)
+- [x] Implement `ClusterSelector.tsx` with live status indicator (🟢 Running / 🔴 Auth Expired / 🟡 Unreachable)
+- [x] Implement `NamespaceSelector.tsx` with quick filter search
+- [x] Implement `PodList.tsx` displaying:
   - Pod Name
   - Status badge (Running, CrashLoop, Pending)
   - Restart count (highlighting non-zero)
   - Age / creation timestamp
-- [ ] Implement `ContainerList.tsx` with container selector and "Previous logs" toggle
-- [ ] Wire up REST API client with Axios or native `fetch` in `src/lib/api.ts`
+- [x] Implement `ContainerList.tsx` with container selector and "Previous logs" toggle
+- [x] Wire up REST API client with Axios or native `fetch` in `src/lib/api.ts`
 
 ### Phase 7: Virtualized Log Viewer & Control Toolbar
-- [ ] Integrate `@tanstack/react-virtual` in `LogViewer.tsx` for row virtualization
-- [ ] Implement batch rendering accumulator (flushing incoming WS lines on a 100-250ms cadence)
-- [ ] Implement `LogLine.tsx` with syntax highlighting (ERROR = red, WARN = yellow, INFO = blue/green)
-- [ ] Implement Auto-scroll toggle:
+- [x] Integrate `@tanstack/react-virtual` in `LogViewer.tsx` for row virtualization
+- [x] Implement batch rendering accumulator (flushing incoming WS lines on a 100-250ms cadence)
+- [x] Implement `LogLine.tsx` with syntax highlighting (ERROR = red, WARN = yellow, INFO = blue/green)
+- [x] Implement Auto-scroll toggle:
   - If user is pinned to bottom, keep auto-scrolling
   - If user scrolls up, disable auto-scroll and render "↓ N new lines" indicator
-- [ ] Implement `LogToolbar.tsx`:
+- [x] Implement `LogToolbar.tsx`:
   - Instant client-side text search with match counter
   - Pause / Resume toggle button
   - Clear local display buffer button
   - Copy all / selected lines
   - Export to `.log` file
-- [ ] Implement Pause Local Queue: buffer up to 5,000 lines during pause; show warning if overflow occurs
+- [x] Implement Pause Local Queue: buffer up to 5,000 lines during pause; show warning if overflow occurs
 
 ### Phase 8: Multi-Tab Viewer System
-- [ ] Implement Zustand `viewerStore.ts`:
+- [x] Implement Zustand `viewerStore.ts`:
   - Manage active tab array: `id`, `title`, `clusterId`, `namespace`, `podName`, `container`, `isPrevious`, `filterQuery`, `isPaused`
   - Active tab pointer
-- [ ] Implement `TabBar.tsx` with tab switching, closing, and new tab creation
-- [ ] Multiplex subscriptions over single WebSocket connection using `viewer_id` routing
-- [ ] Enforce soft limit (10 tabs warning banner) and hard limit (max 20 tabs)
+- [x] Implement `TabBar.tsx` with tab switching, closing, and new tab creation
+- [x] Multiplex subscriptions over single WebSocket connection using `viewer_id` routing
+- [x] Enforce soft limit (10 tabs warning banner) and hard limit (max 20 tabs)
 
 ### Phase 9: Admin Screens & Operational Polish
-- [ ] Implement `ConnectionMonitor.tsx` (`/admin/connections`):
+- [x] Implement `ConnectionMonitor.tsx` (`/admin/connections`):
   - Table of active shared K8s streams
   - Subscriber count per stream
   - Current lines/sec and bytes/sec rate
   - Dropped entries per subscriber
   - Total memory consumption estimate
-- [ ] Implement `SettingsPanel.tsx` (`/admin/settings`):
+- [x] Implement `SettingsPanel.tsx` (`/admin/settings`):
   - Form editing buffer limits, default tail lines, batch windows, max tabs
   - Persist updates to SQLite database via `PUT /api/v1/admin/settings`
-- [ ] Implement Token Expiry Modal & Reconnect Trigger:
+- [x] Implement Token Expiry Modal & Reconnect Trigger:
   - Banner warning: "Authentication expired for cluster [name]"
   - Action button: "Reconnect" (triggers `POST /api/v1/clusters/{id}/reconnect`)
-- [ ] Keyboard shortcuts: `Ctrl+F` (search), `Space` (pause), `Ctrl+End` (bottom), `Ctrl+Shift+T` (new tab), `Ctrl+W` (close tab)
-- [ ] Final end-to-end integration verification
+- [x] Keyboard shortcuts: `Ctrl+F` (search), `Space` (pause), `Ctrl+End` (bottom), `Ctrl+Shift+T` (new tab), `Ctrl+W` (close tab)
+- [x] Final end-to-end integration verification
+
+### Phase 10: V2 Unified Capabilities (Optional Enablement & Platform Polish)
+- [x] Unified V1 + V2 Configuration Schema (`internal/config/config.go`):
+  - `auth`: Azure AD (Entra ID) / OIDC with toggle (`auth.enabled: false` default)
+  - `s3_export`: S3 bucket, region, prefix, ambient IAM role / access keys (`s3_export.enabled: false` default)
+  - `redaction`: regex masking rules with live tester sandbox (`redaction.enabled: false` default)
+  - `features`: multi-container merge, pod groups, pod events toggles
+- [x] V2 Multi-Container Log Streaming & Merging (`internal/kubernetes/logs.go`):
+  - Stream all containers concurrently when container is `_all_` or comma-separated
+  - Synchronized sequence number and timestamp interleaving
+  - Frontend "All Containers (Merged)" button and container badge chips in `LogLine.tsx`
+- [x] V2 Kubernetes Pod Events API & Panel (`internal/kubernetes/events.go`):
+  - Endpoint `GET /api/v1/clusters/{id}/namespaces/{ns}/pods/{pod}/events`
+  - Collapsible Pod Events Drawer in `LogViewer.tsx` with severity chips, count, and refresh
+- [x] V2 Log Redaction & Masking Engine (`internal/redaction/redactor.go`):
+  - Regex-based masking for AWS keys, bearer tokens, passwords
+  - Admin test sandbox endpoint `POST /api/v1/admin/redaction/test`
+- [x] V2 On-Demand S3 Log Export (`internal/export/s3.go`):
+  - Pure-Go AWS SigV4 signed PUT object with automatic gzip compression
+  - Endpoint `POST /api/v1/clusters/{id}/namespaces/{ns}/pods/{pod}/export-s3`
+  - "S3" button in `LogToolbar.tsx` with notification banner
+- [x] V2 Azure AD (Entra ID) / OIDC Authentication Module (`internal/auth/auth.go`):
+  - HMAC-SHA256 JWT sessions and cookie middleware
+  - Non-blocking: when disabled, defaults to `Local Administrator` transparently
+  - User session badge & sign-in/sign-out controls in `Header.tsx`
+- [x] Comprehensive Tabbed Admin Settings UI (`SettingsModal.tsx`):
+  - General & Buffering, Azure AD / SSO, AWS S3 Export, Data Redaction (with live tester), Server Operations
+  - Wider container (`max-w-4xl`), 2-column responsive grid layout, and fixed pinned footer save bar
+- [x] Single-binary re-compilation with embedded React 18 production bundle (`bin/lora.exe`)
+- [x] Cross-platform Linux Support:
+  - Cross-compiled native static Linux ELF binary (`bin/lora-linux-amd64`)
+  - Multi-stage production `Dockerfile` with embedded `kubectl` and static asset bundling
+  - `docker-compose.yaml` and systemd unit (`lora.service`) for VM deployments
 
 ---
 
@@ -288,6 +359,48 @@ All endpoints prefix: `/api/v1`
       }
     ]
     ```
+
+* **`POST /api/v1/clusters`**
+  * **Description:** Dynamically add a new Kubernetes cluster via UI form. Persists to `lora-config.yaml` and initializes connection in-memory.
+  * **Request Body:**
+    ```json
+    {
+      "id": "prod-us",
+      "name": "Production US EKS",
+      "environment": "production",
+      "managed_kubeconfig": true,
+      "kconnect": {
+        "enabled": true,
+        "command": "kconnect",
+        "args": ["use", "eks", "--cluster", "prod-us-eks"],
+        "auto_refresh": false
+      },
+      "enabled": true
+    }
+    ```
+  * **Response `200 OK`:**
+    ```json
+    {
+      "success": true,
+      "cluster": {
+        "id": "prod-us",
+        "name": "Production US EKS",
+        "status": "HEALTHY"
+      }
+    }
+    ```
+
+* **`PUT /api/v1/clusters/{id}`**
+  * **Description:** Update existing cluster settings dynamically.
+
+* **`DELETE /api/v1/clusters/{id}`**
+  * **Description:** Remove cluster from configuration and release resources.
+
+* **`GET /api/v1/clusters/{id}/config`**
+  * **Description:** Get raw configuration for editing in the UI form.
+
+* **`POST /api/v1/admin/restart`**
+  * **Description:** Gracefully restart the backend server process.
 
 * **`POST /api/v1/clusters/{id}/reconnect`**
   * **Description:** Forces backend to reload the specified cluster's kubeconfig file from disk and refresh client.
@@ -402,6 +515,50 @@ All endpoints prefix: `/api/v1`
 ### 5.7 Admin Settings
 * **`GET /api/v1/admin/settings`** & **`PUT /api/v1/admin/settings`**
   * Request/Response JSON mirrors the `streaming`, `websocket`, `viewer`, and `display` configuration fields.
+
+### 5.8 Kconnect Command Execution & Automation
+* **`POST /api/v1/clusters/{id}/kconnect/execute`**
+  * **Description:** Executes `kconnect` for the specified cluster, writes credentials to the LORA-managed kubeconfig file, and reloads client-go.
+  * **Request Body (Optional):**
+    ```json
+    {
+      "password": "optional_secure_password",
+      "mfa_code": "optional_mfa_code",
+      "extra_args": ["--alias", "dev-alias"]
+    }
+    ```
+  * **Response `200 OK`:**
+    ```json
+    {
+      "success": true,
+      "cluster_id": "dev",
+      "output": "Configuration written to ./data/kubeconfigs/dev.config\nContext set successfully.",
+      "status": "HEALTHY",
+      "duration_ms": 1420
+    }
+    ```
+  * **Response `401 / 500 Error`:**
+    ```json
+    {
+      "success": false,
+      "cluster_id": "dev",
+      "error": "Authentication failed: invalid MFA token or credentials",
+      "stderr": "kconnect: error: invalid credentials provided"
+    }
+    ```
+
+* **`GET /api/v1/clusters/{id}/kconnect/config`**
+  * **Response `200 OK`:**
+    ```json
+    {
+      "cluster_id": "dev",
+      "command": "kconnect",
+      "args": ["use", "eks", "--cluster", "dev-eks-cluster"],
+      "managed_kubeconfig_path": "./data/kubeconfigs/dev.config",
+      "auto_refresh": true,
+      "last_executed": "2026-11-01T06:30:00Z"
+    }
+    ```
 
 ---
 
@@ -662,27 +819,82 @@ type PodConnection struct {
 
 ---
 
-## 8. Kconnect & Kubeconfig Authentication Lifecycle
+## 8. Automated Kconnect Execution, Self-Managed Kubeconfigs & Seamless Token Renewal
 
-```text
-       [ User runs kconnect in terminal ]
-                       │
-                       ▼
-         ~/.kube/dev-config is updated
-                       │
-    ┌──────────────────┴──────────────────┐
-    │                                     │
-    ▼ (API returns 401 Unauthorized)      ▼ (User clicks Reconnect in UI)
-Cluster status becomes AUTH_EXPIRED   POST /api/v1/clusters/dev/reconnect
-    │                                     │
-    ▼                                     ▼
-UI displays red banner:              Backend reads ~/.kube/dev-config
-"Token expired. Re-run kconnect"     Verifies discoveryClient.ServerVersion()
-                                          │
-                                          ▼
-                                     Status -> HEALTHY
-                                     Resumes active streams automatically!
+### 8.1 Core Principle: Never Restart LORA on Token Expiry
+When an EKS token expires:
+1. **LORA must NOT be restarted.**
+2. **Active viewer tabs must NOT be closed.**
+3. **Log history already received in the browser must NOT be lost.**
+4. **Kubeconfig file paths are managed automatically by LORA** in `./data/kubeconfigs/{cluster-id}.config`.
+
+### 8.2 Two Re-Authentication Modes
+
+```mermaid
+flowchart TD
+    E[Active Stream detects 401 Unauthorized / Token Expiry] --> P[Stream transitions to RECONNECTING state<br/>Logs pause temporarily, viewer tab stays open]
+    P --> CHK{Is Cluster configured for<br/>Auto-Refresh / Headless?}
+
+    CHK -->|Yes: Auto-Refresh Enabled| AUTO[LORA runs kconnect CLI in background<br/>kconnect use eks ... --kubeconfig ./data/kubeconfigs/dev.config]
+    CHK -->|No: Interactive / Password / MFA required| PROMPT[UI displays in-app re-auth banner/modal<br/>'Token expired. Enter credentials / Click Renew']
+
+    PROMPT -->|User clicks Renew / submits creds| AUTO
+    AUTO --> RES{kconnect command result}
+
+    RES -->|Success| RELOAD[Backend reloads client-go Clientset from updated file<br/>No server restart needed!]
+    RES -->|Failure| ERR[Display specific kconnect error message in UI<br/>Keep streams paused for retry]
+
+    RELOAD --> RESUME[Stream resumes from last received timestamp<br/>Tab state -> STREAMING<br/>Live logs resume seamlessly!]
 ```
+
+### 8.3 Self-Managed Kubeconfig Storage
+Instead of forcing the user to manually name and track separate kubeconfig files:
+* When `managed_kubeconfig: true` is set, LORA assigns each cluster its own deterministic path:
+  `./data/kubeconfigs/{clusterID}.config`
+* When running `kconnect`, LORA automatically appends `--kubeconfig ./data/kubeconfigs/{clusterID}.config`.
+* Kubeconfigs are isolated per cluster, preventing context collision.
+* The directory `./data/kubeconfigs/` is created on startup and git-ignored.
+
+### 8.4 Automated `kconnect` Execution Engine (`internal/cluster/runner.go`)
+LORA provides a built-in process runner that executes `kconnect.exe` or `kubectl.exe` directly on the host:
+* **Command Template:**
+  ```text
+  kconnect use eks --cluster <cluster_name> --kubeconfig ./data/kubeconfigs/<cluster_id>.config [additional_args...]
+  ```
+* **Credential Injection:** Credentials (such as username, profile, or identity provider flags) can be passed as arguments or injected securely via standard environment variables (e.g. `AWS_PROFILE`, `KCONNECT_USERNAME`, `KCONNECT_PASSWORD`).
+* **Execution Timeout:** Each execution has a strict 30-second timeout with stdout/stderr capture for immediate debugging in the LORA UI.
+
+### 8.5 Seamless In-Flight Stream Recovery
+When a cluster's authentication expires while multiple users/tabs are actively streaming:
+1. The shared `PodConnection` enters `StateReconnecting`.
+2. Existing subscribers remain attached; their queues are preserved.
+3. The WebSocket hub emits a message:
+   ```json
+   {
+     "type": "stream.status",
+     "viewer_id": "tab-1234",
+     "status": "RECONNECTING",
+     "message": "Token expired. Renewing session via kconnect..."
+   }
+   ```
+4. The frontend shows a subtle status pill: `🟡 Reconnecting session...`
+5. LORA runs the `kconnect` command. Once the kubeconfig is refreshed, the backend establishes a fresh Kubernetes log stream using `SinceTime: lastEntryTimestamp`.
+6. Live logs begin flowing again. The frontend automatically switches to `🟢 Streaming`.
+7. **Zero log loss, zero tab disruption, zero server restarts.**
+
+### 8.6 Dedicated Kconnect API Endpoints
+* **`POST /api/v1/clusters/{id}/kconnect/execute`**
+  * Manually or automatically trigger `kconnect` for the specified cluster.
+  * Optional request body:
+    ```json
+    {
+      "password": "optional_secure_input",
+      "mfa_code": "optional_mfa_code"
+    }
+    ```
+  * Returns execution logs and updated cluster health status.
+* **`GET /api/v1/clusters/{id}/kconnect/config`**
+  * Inspect the configured command, arguments, and auto-refresh schedule for the cluster.
 
 ---
 
